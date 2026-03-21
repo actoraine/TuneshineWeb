@@ -1,0 +1,78 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Tuneshine Mock",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/state": {
+      "get": {
+        "summary": "Read current state",
+        "parameters": [
+          {
+            "name": "verbose",
+            "in": "query",
+            "schema": { "type": "boolean" }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Set metadata",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "artist": { "type": "string" },
+                  "track": { "type": "string" }
+                },
+                "required": ["artist", "track"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/image": {
+      "post": {
+        "summary": "Upload image",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "string" },
+                  "image": { "type": "string", "format": "binary" }
+                },
+                "required": ["source", "image"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/message": {
+      "post": {
+        "summary": "Send plain text message",
+        "parameters": [
+          {
+            "name": "x-mode",
+            "in": "header",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

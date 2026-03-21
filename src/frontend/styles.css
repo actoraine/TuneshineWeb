@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f3f5f8;
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-strong: #ffffff;
+  --text: #122131;
+  --muted: #4c5a69;
+  --primary: #0050b8;
+  --primary-hover: #003f91;
+  --danger: #9f1135;
+  --border: #d8e0e8;
+  --shadow: 0 10px 26px rgba(13, 27, 42, 0.1);
+  --font: "Avenir Next", "Segoe UI", "SF Pro Text", sans-serif;
+}
+
+[data-theme='dark'] {
+  --bg: #101418;
+  --surface: rgba(19, 25, 33, 0.86);
+  --surface-strong: #151c24;
+  --text: #e8edf2;
+  --muted: #b4c0cc;
+  --primary: #55a2ff;
+  --primary-hover: #3992ff;
+  --danger: #ff6f8d;
+  --border: #2b3a4a;
+  --shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 5% 0%, rgba(84, 156, 255, 0.2), transparent 42%),
+    radial-gradient(circle at 95% 20%, rgba(0, 171, 140, 0.2), transparent 35%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.page-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 240px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.eyebrow {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+.ghost-button {
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.status-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 16px 16px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.status-panel {
+  max-width: 1080px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  pointer-events: auto;
+}
+
+.status-output {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.93rem;
+}
+
+.ops-title {
+  margin-top: 24px;
+}
+
+.operation-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.operation-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.operation-card h3 {
+  font-size: 1rem;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.controls {
+  display: grid;
+  gap: 8px;
+}
+
+.loop-controls {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.loop-controls h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+input,
+textarea,
+select {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 9px;
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+button.run-button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #fff;
+  background: var(--primary);
+  cursor: pointer;
+}
+
+button.run-button:hover:enabled {
+  background: var(--primary-hover);
+}
+
+button.stop-button {
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--danger);
+  background: transparent;
+  cursor: pointer;
+}
+
+button.stop-button:hover:enabled {
+  background: rgba(159, 17, 53, 0.12);
+}
+
+button.run-button:disabled,
+button.stop-button:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled,
+button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    padding: 18px 12px 230px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status-dock {
+    padding: 0 12px 12px;
+  }
+}
