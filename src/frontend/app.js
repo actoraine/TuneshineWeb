@@ -207,15 +207,352 @@ function operationLooksLikeImageFlow(operation) {
   return haystack.includes('image');
 }
 
-export function renderOperations(container, operations, statusWriter) {
+function operationSuppressedInFocusedUi(operation) {
+  const path = String(operation?.path || '').toLowerCase();
+  return path.includes('/openapi.json') || path.includes('/brightness');
+}
+
+function operationShortTitle(operation) {
+  const haystack = `${operation?.id || ''} ${operation?.summary || ''} ${operation?.path || ''}`.toLowerCase();
+  const method = String(operation?.method || '').toLowerCase();
+  if (haystack.includes('image') && (haystack.includes('upload') || method === 'post')) {
+    return 'Upload Image';
+  }
+  if (haystack.includes('image') && (haystack.includes('delete') || method === 'delete')) {
+    return 'Delete Image';
+  }
+  if (haystack.includes('health') || String(operation?.path || '').toLowerCase().includes('/health')) {
+    return 'Health Check';
+  }
+  if (haystack.includes('state') || String(operation?.path || '').toLowerCase().includes('/state')) {
+    return 'State';
+  }
+  return operation.summary || operation.id;
+}
+
+function operationScoreForTab(operation, tab) {
+  const haystack = `${operation?.id || ''} ${operation?.summary || ''} ${operation?.path || ''}`.toLowerCase();
+  const path = String(operation?.path || '').toLowerCase();
+  const method = String(operation?.method || '').toLowerCase();
+
+  if (tab === 'upload') {
+    if (haystack.includes('image') && method === 'post') {
+      return 0;
+    }
+    return 99;
+  }
+
+  if (tab === 'remove') {
+    if (haystack.includes('image') && method === 'delete') {
+      return 0;
+    }
+    return 99;
+  }
+
+  if (tab === 'state') {
+    if (haystack.includes('state') || path.includes('/state')) {
+      return method === 'get' ? 0 : 1;
+    }
+    return 99;
+  }
+
+  if (tab === 'health') {
+    if (haystack.includes('health') || path.includes('/health')) {
+      return method === 'get' ? 0 : 1;
+    }
+    return 99;
+  }
+
+  return 99;
+}
+
+function pickOperationForTab(operations, tab) {
+  const scored = operations
+    .map((operation) => ({ operation, score: operationScoreForTab(operation, tab) }))
+    .filter((entry) => entry.score < 99)
+    .sort((a, b) => a.score - b.score);
+  return scored[0]?.operation || null;
+}
+
+function tryParseJson(text) {
+  if (typeof text !== 'string') {
+    return null;
+  }
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function humanizeKey(input) {
+  return String(input || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function humanizeValue(value) {
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  if (value === null || value === undefined || value === '') {
+    return 'Not set';
+  }
+  return String(value);
+}
+
+function flattenDetails(value, prefix = '', rows = [], maxRows = 24) {
+  if (rows.length >= maxRows) {
+    return rows;
+  }
+
+  if (value === null || value === undefined) {
+    rows.push({ key: prefix || 'Value', value: 'Not set' });
+    return rows;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      rows.push({ key: prefix || 'Items', value: 'None' });
+      return rows;
+    }
+    const scalarArray = value.every((item) => typeof item !== 'object' || item === null);
+    if (scalarArray) {
+      rows.push({ key: prefix || 'Items', value: value.map((item) => humanizeValue(item)).join(', ') });
+      return rows;
+    }
+    for (let index = 0; index < value.length; index += 1) {
+      flattenDetails(value[index], `${prefix || 'Item'} ${index + 1}`, rows, maxRows);
+      if (rows.length >= maxRows) {
+        break;
+      }
+    }
+    return rows;
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      rows.push({ key: prefix || 'Details', value: 'None' });
+      return rows;
+    }
+    for (const [key, nextValue] of entries) {
+      const nextKey = prefix ? `${prefix} > ${humanizeKey(key)}` : humanizeKey(key);
+      flattenDetails(nextValue, nextKey, rows, maxRows);
+      if (rows.length >= maxRows) {
+        break;
+      }
+    }
+    return rows;
+  }
+
+  rows.push({ key: prefix || 'Value', value: humanizeValue(value) });
+  return rows;
+}
+
+function pushDetailRow(details, key, value) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+  details.push({ key: humanizeKey(key), value: humanizeValue(value) });
+}
+
+function parseStatusModel(text, isError = false) {
+  const fallback = {
+    tone: isError ? 'error' : 'warn',
+    title: isError ? 'Action failed' : 'Waiting for action',
+    subtitle: text || 'Run an action to see results here.',
+    details: []
+  };
+
+  if (typeof text !== 'string' || text.trim() === '') {
+    return fallback;
+  }
+
+  if (text.startsWith('Success\nHTTP ')) {
+    const lines = text.split('\n');
+    const match = /^HTTP\s+(\d+)\s+(.+)$/.exec(lines[1] || '');
+    const code = Number(match?.[1] || 0);
+    const bodyText = lines.slice(2).join('\n').trim();
+    const parsedBody = tryParseJson(bodyText);
+    let details = [];
+    if (parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)) {
+      details = flattenDetails(parsedBody);
+    } else if (bodyText) {
+      pushDetailRow(details, 'Result', bodyText);
+    }
+    return {
+      tone: code >= 200 && code < 300 ? 'ok' : 'error',
+      title: code >= 200 && code < 300 ? 'Action completed' : 'Action returned an error',
+      subtitle: '',
+      details
+    };
+  }
+
+  if (text.startsWith('Error\n')) {
+    const message = text.split('\n').slice(1).join('\n').trim();
+    const parsed = tryParseJson(message);
+    const details = [];
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [key, value] of Object.entries(parsed)) {
+        pushDetailRow(details, key, value);
+      }
+    } else {
+      pushDetailRow(details, 'Message', message);
+    }
+    return {
+      tone: 'error',
+      title: 'Action failed',
+      subtitle: 'Please check parameters and try again.',
+      details
+    };
+  }
+
+  if (text.startsWith('Running')) {
+    return {
+      tone: 'warn',
+      title: 'Action in progress',
+      subtitle: text,
+      details: []
+    };
+  }
+
+  if (text.startsWith('Connected to ')) {
+    const lines = text.split('\n');
+    return {
+      tone: 'ok',
+      title: 'Connected',
+      subtitle: lines[0],
+      details: lines.slice(1).map((line, index) => ({ key: index === 0 ? 'info' : 'details', value: line }))
+    };
+  }
+
+  return {
+    tone: isError ? 'error' : 'warn',
+    title: isError ? 'Action failed' : 'Update',
+    subtitle: text,
+    details: []
+  };
+}
+
+function renderStatusModel(container, model) {
+  container.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'status-head';
+
+  const dot = document.createElement('span');
+  dot.className = `status-dot${model.tone === 'ok' ? ' ok' : ''}${model.tone === 'error' ? ' error' : ''}`;
+  dot.setAttribute('aria-hidden', 'true');
+  head.appendChild(dot);
+
+  const textWrap = document.createElement('div');
+  const title = document.createElement('div');
+  title.className = 'status-title';
+  title.textContent = model.title;
+  textWrap.appendChild(title);
+
+  if (model.subtitle) {
+    const subtitle = document.createElement('div');
+    subtitle.className = 'status-subtitle';
+    subtitle.textContent = model.subtitle;
+    textWrap.appendChild(subtitle);
+  }
+  head.appendChild(textWrap);
+
+  container.appendChild(head);
+
+  if (!Array.isArray(model.details) || model.details.length === 0) {
+    return;
+  }
+
+  const details = document.createElement('div');
+  details.className = 'status-details';
+
+  const root = { children: new Map(), value: null };
+  for (const detail of model.details) {
+    const parts = String(detail.key || '')
+      .split(' > ')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length === 0) {
+      continue;
+    }
+    let node = root;
+    for (const part of parts) {
+      if (!node.children.has(part)) {
+        node.children.set(part, { children: new Map(), value: null });
+      }
+      node = node.children.get(part);
+    }
+    node.value = String(detail.value);
+  }
+
+  function renderNode(name, node, depth) {
+    const branch = document.createElement('div');
+    branch.className = 'status-tree-branch';
+    branch.style.setProperty('--tree-depth', String(depth));
+
+    const hasChildren = node.children.size > 0;
+    if (hasChildren) {
+      const title = document.createElement('div');
+      title.className = 'status-group-title tree-node';
+      title.textContent = name;
+      branch.appendChild(title);
+    } else {
+      const row = document.createElement('div');
+      row.className = 'status-row is-nested tree-leaf';
+
+      const key = document.createElement('span');
+      key.className = 'status-key';
+      key.textContent = name;
+      row.appendChild(key);
+
+      const value = document.createElement('span');
+      value.className = 'status-value';
+      value.textContent = node.value || 'Not set';
+      row.appendChild(value);
+
+      branch.appendChild(row);
+    }
+
+    for (const [childName, childNode] of node.children) {
+      branch.appendChild(renderNode(childName, childNode, depth + 1));
+    }
+
+    return branch;
+  }
+
+  for (const [name, node] of root.children) {
+    details.appendChild(renderNode(name, node, 0));
+  }
+
+  container.appendChild(details);
+}
+
+export function renderOperations(container, operations, statusWriter, options = {}) {
   container.innerHTML = '';
   const runButtons = [];
   const controls = [];
   const stopButtons = [];
   let activeLoopStopButton = null;
   let activeLoopToken = null;
+  const secondaryOperations = options.secondaryOperations || new Set();
+  const useFriendlyTitles = Boolean(options.useFriendlyTitles);
+  const showMeta = options.showMeta !== false;
+  const busyApi = options.busyApi || {
+    get: () => false,
+    set: () => {}
+  };
 
   function toggleBusyState(busy) {
+    busyApi.set(busy);
     for (const button of runButtons) {
       button.disabled = busy;
     }
@@ -232,13 +569,19 @@ export function renderOperations(container, operations, statusWriter) {
     card.className = 'operation-card';
 
     const title = document.createElement('h3');
-    title.textContent = operation.summary || operation.id;
+    title.textContent = useFriendlyTitles ? operationShortTitle(operation) : (operation.summary || operation.id);
     card.appendChild(title);
 
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.textContent = `${operation.method.toUpperCase()} ${operation.path}`;
-    card.appendChild(meta);
+    if (showMeta) {
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = `${operation.method.toUpperCase()} ${operation.path}`;
+      card.appendChild(meta);
+    }
+
+    if (secondaryOperations.has(operation)) {
+      card.classList.add('secondary-card');
+    }
 
     const controlsWrap = document.createElement('div');
     controlsWrap.className = 'controls';
@@ -439,6 +782,10 @@ export function renderOperations(container, operations, statusWriter) {
     runButtons.push(runButton);
 
     const handler = async () => {
+      if (busyApi.get()) {
+        statusWriter('Action in progress. Please wait for completion.');
+        return;
+      }
       try {
         toggleBusyState(true);
         statusWriter(`Running ${operation.method.toUpperCase()} ${operation.path}...`);
@@ -512,6 +859,10 @@ export function renderOperations(container, operations, statusWriter) {
       });
 
       loopButton.addEventListener('click', async () => {
+        if (busyApi.get()) {
+          statusWriter('Action in progress. Please wait for completion.');
+          return;
+        }
         const selectedFiles = Array.from(sequenceFilesField.input.files || []);
         const intervalSeconds = Number(intervalField.input.value);
         if (selectedFiles.length === 0) {
@@ -581,15 +932,46 @@ export function renderOperations(container, operations, statusWriter) {
   return { handlers, toggleBusyState };
 }
 
+export const __test__ = {
+  fileToBase64,
+  sampleForSchema,
+  canRenderFriendlyJsonFields,
+  operationLooksLikeImageFlow,
+  operationSuppressedInFocusedUi,
+  operationShortTitle,
+  operationScoreForTab,
+  pickOperationForTab,
+  tryParseJson,
+  humanizeKey,
+  humanizeValue,
+  flattenDetails,
+  parseStatusModel,
+  renderStatusModel
+};
+
 export async function initApp() {
   initTheme();
 
   const statusOutput = document.getElementById('status-output');
   const operationsContainer = document.getElementById('operations-container');
+  const contextTitle = document.getElementById('context-title');
+  const connectionBanner = document.getElementById('connection-banner');
+  const tabButtons = Array.from(document.querySelectorAll('.tab-button'));
+  let globalBusy = false;
+
+  const busyApi = {
+    get: () => globalBusy,
+    set: (busy) => {
+      globalBusy = Boolean(busy);
+      for (const button of tabButtons) {
+        button.disabled = globalBusy;
+      }
+    }
+  };
 
   const statusWriter = (text, isError = false) => {
-    statusOutput.textContent = text;
-    statusOutput.classList.toggle('error', isError);
+    const model = parseStatusModel(text, isError);
+    renderStatusModel(statusOutput, model);
   };
 
   try {
@@ -602,7 +984,61 @@ export async function initApp() {
     }
 
     const operations = payload.operations || [];
-    renderOperations(operationsContainer, operations, statusWriter);
+    const focused = operations.filter((operation) => !operationSuppressedInFocusedUi(operation));
+
+    const operationsByTab = {
+      upload: pickOperationForTab(focused, 'upload'),
+      remove: pickOperationForTab(focused, 'remove'),
+      state: pickOperationForTab(focused, 'state'),
+      health: pickOperationForTab(focused, 'health')
+    };
+
+    const tabLabels = {
+      upload: 'Image Upload',
+      remove: 'Image Removal',
+      state: 'State',
+      health: 'Health'
+    };
+
+    function renderTab(tab) {
+      for (const button of tabButtons) {
+        button.classList.toggle('active', button.dataset.tab === tab);
+      }
+      contextTitle.textContent = tabLabels[tab] || 'Action';
+
+      const operation = operationsByTab[tab];
+      if (!operation) {
+        operationsContainer.innerHTML = '';
+        const empty = document.createElement('article');
+        empty.className = 'operation-card';
+        const heading = document.createElement('h3');
+        heading.textContent = tabLabels[tab] || 'Action';
+        const help = document.createElement('p');
+        help.className = 'status-empty';
+        help.textContent = 'No matching endpoint is available in the API spec for this action.';
+        empty.appendChild(heading);
+        empty.appendChild(help);
+        operationsContainer.appendChild(empty);
+        return;
+      }
+
+      renderOperations(operationsContainer, [operation], statusWriter, {
+        useFriendlyTitles: true,
+        showMeta: true,
+        busyApi
+      });
+    }
+
+    connectionBanner.textContent = `Connected to ${payload.baseUrl}`;
+
+    for (const button of tabButtons) {
+      button.addEventListener('click', () => {
+        renderTab(String(button.dataset.tab));
+      });
+    }
+
+    renderTab('upload');
+
     statusWriter(
       `Connected to ${payload.baseUrl}\nActive API version: ${payload.apiVersion || 'unknown'}\nLoaded ${operations.length} operations.`
     );

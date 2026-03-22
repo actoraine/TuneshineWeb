@@ -9,25 +9,37 @@
   <body>
     <div class="page-shell">
       <header class="topbar">
-        <div>
+        <div class="heading-wrap">
           <p class="eyebrow">Tuneshine</p>
-          <h1>Device Control Panel</h1>
+          <h1>Image Workflow</h1>
+          <p class="subhead">Fast upload and delete controls with a cleaner layout.</p>
+          <p id="connection-banner" class="connection-banner">Connecting...</p>
         </div>
-        <button id="theme-toggle" class="ghost-button" type="button" aria-label="Toggle theme">Toggle Theme</button>
+        <button id="theme-toggle" class="ghost-button" type="button" aria-label="Toggle theme">Theme</button>
       </header>
 
-      <section>
-        <h2 class="ops-title">Available Actions</h2>
-        <div id="operations-container" class="operation-grid"></div>
-      </section>
-    </div>
+      <main class="workspace">
+        <nav class="tabs-panel" aria-label="Primary actions">
+          <h2 class="panel-title">Actions</h2>
+          <button class="tab-button active" type="button" data-tab="upload">Image Upload</button>
+          <button class="tab-button" type="button" data-tab="remove">Image Removal</button>
+          <button class="tab-button" type="button" data-tab="state">State</button>
+          <button class="tab-button" type="button" data-tab="health">Health</button>
+        </nav>
 
-    <section class="status-dock" aria-live="polite">
-      <div class="status-panel">
-        <h2>Status</h2>
-        <div id="status-output" class="status-output">Loading API specification...</div>
-      </div>
-    </section>
+        <section class="actions-panel">
+          <div class="actions-header">
+            <h2 id="context-title" class="ops-title">Image Upload</h2>
+          </div>
+          <div id="operations-container" class="operation-grid"></div>
+        </section>
+
+        <aside class="status-panel" aria-live="polite">
+          <h2>Activity</h2>
+          <div id="status-output" class="status-output">Loading API specification...</div>
+        </aside>
+      </main>
+    </div>
 
     <script type="module" src="/app.js"></script>
   </body>
