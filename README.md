@@ -2,6 +2,10 @@
 
 Local Node.js single-page web app for non-technical users to operate a Tuneshine device through its API.
 
+## UI Screenshot
+
+![Tuneshine Web Console screenshot](docs/images/web-app-screenshot.png)
+
 ## What This App Does
 
 - Discovers API actions dynamically from `http://<tuneshine-host>/openapi.json`
@@ -36,8 +40,8 @@ Local Node.js single-page web app for non-technical users to operate a Tuneshine
 
 This app integrates using Tuneshine host information from the help page and local-network hostname pattern:
 
-- Hostname example: `tuneshine-6f34.local`
-- OpenAPI source: `http://tuneshine-6f34.local/openapi.json`
+- Hostname example: `tuneshine-abcd.local`
+- OpenAPI source: `http://tuneshine-abcd.local/openapi.json`
 - Recommended state endpoint behavior is supported by providing direct API operation execution from the discovered spec.
 
 More official documentation is available from [Tuneshine Help (API)](https://links.tuneshine.rocks/help?mc_cid=b79beaf20d&mc_eid=bd9e96655f#api), including how to locate the hostname of your Tuneshine device.
@@ -62,7 +66,7 @@ YAML format:
 host: 127.0.0.1
 port: 3000
 tuneshine:
-  baseUrl: http://tuneshine-6f34.local
+  baseUrl: http://tuneshine-abcd.local
   timeoutMs: 10000
   specCacheFilePath: cache/spec-v1_0_0.json
   apiVersion: v1_0_0
